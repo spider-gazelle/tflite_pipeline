@@ -1,0 +1,29 @@
+name: tflite_pipeline
+version: 1.0.0
+
+dependencies:
+  # the model interpreter
+  tensorflow_lite:
+    github: spider-gazelle/tensorflow_lite
+
+  # helpers for image processing
+  tflite_image:
+    github: spider-gazelle/tflite_image
+    branch: master
+
+  # video stream ingest and video scaling
+  ffmpeg:
+    github: spider-gazelle/ffmpeg
+
+  # Low latency video frames
+  v4l2:
+    github: spider-gazelle/v4l2.cr
+
+  # async coordination
+  promise:
+    github: spider-gazelle/promise
+
+authors:
+  - Stephen von Takach <steve@place.tech>
+
+license: MIT
