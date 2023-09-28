@@ -24,13 +24,13 @@ class TensorflowLite::Pipeline::Input::Image < TensorflowLite::Pipeline::Input
   def process(image : StumpyCore::Canvas)
     @current_image = image
 
-    # todo:: perform the measurements in the coordinator class
-    # @stats.add_time(Time.measure {
-    #
-    # })
+    # for images we'll always have to adjust the scaling method
+    # this pipeline is mainly for testing anyway
+    @format_cb.try &.call(FFmpeg::PixelFormat::Rgb48Le, image.width, image.height)
 
+    # send the image for processing
     select
-    when @image_channel.send(image) then true
+    when @next_frame.send(FFmpeg::Frame.new(image)) then true
     else
       stats.skipped += 1
       false

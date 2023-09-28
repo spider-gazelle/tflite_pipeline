@@ -12,7 +12,7 @@ class TensorflowLite::Pipeline::Configuration::Model
 
   # hardware acceleration
   property tpu_delegate : String? = nil
-  property gpu_delegate : Bool = false
+  property? gpu_delegate : Bool = false
 
   # face detection only
   property strides : Array(Int32)? = nil
@@ -25,6 +25,9 @@ class TensorflowLite::Pipeline::Configuration::Model
   # =====================================================
   # for internal use, tracking where the files are stored
   # =====================================================
+
+  @[JSON::Field(ignore: true)]
+  property! scaler : Coordinator::Scaler
 
   @[JSON::Field(ignore_deserialize: true)]
   getter warnings : Array(String) = [] of String
@@ -69,7 +72,7 @@ class TensorflowLite::Pipeline::Configuration::Model
       @warnings << "failed to find requested TPU, falling back to CPU processing"
     end
 
-    if gpu_delegate
+    if gpu_delegate?
       @warnings << "GPU delegate not available, falling back to CPU processing"
     end
 

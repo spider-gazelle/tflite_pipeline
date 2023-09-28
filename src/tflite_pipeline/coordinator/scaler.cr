@@ -1,4 +1,5 @@
 require "../coordinator"
+require "ffmpeg"
 
 class TensorflowLite::Pipeline::Coordinator::Scaler
   def initialize(
@@ -20,6 +21,8 @@ class TensorflowLite::Pipeline::Coordinator::Scaler
       FFmpeg::PixelFormat::Yuvj420P,
       FFmpeg::PixelFormat::Rgb24,
       FFmpeg::PixelFormat::Bgr24,
+      FFmpeg::PixelFormat::Rgb48Le,
+      FFmpeg::PixelFormat::Rgb48Be,
     }.includes? @input_format
 
     # setup the buffers for storing the results
@@ -29,7 +32,7 @@ class TensorflowLite::Pipeline::Coordinator::Scaler
       Log.warn { "input format is not optimal. There will be cropping overheads" }
       @cropped_frame = FFmpeg::Frame.new(@input_width, @input_height, :rgb24)
       scale_format = FFmpeg::PixelFormat::Rgb24
-      @format_change = SWScale.new(@input_width, @input_height, @input_format, @input_width, @input_height, :rgb24)
+      @format_change = FFmpeg::SWScale.new(@input_width, @input_height, @input_format, @input_width, @input_height, :rgb24)
     else
       # just so it's not nil
       @cropped_frame = @output_frame
@@ -38,7 +41,12 @@ class TensorflowLite::Pipeline::Coordinator::Scaler
 
     # init the scaler
     @scaler = FFmpeg::SWScale.new(cropped_width, cropped_height, scale_format, @desired_width, @desired_height, :rgb24)
-    @format_change ||= @scaler
+
+    if requires_cropping? && !@fast_path
+      @format_change = FFmpeg::SWScale.new(@input_width, @input_height, @input_format, @input_width, @input_height, :rgb24)
+    else
+      @format_change = @scaler
+    end
   end
 
   # if cropping is required then we move data to this frame,
@@ -70,7 +78,7 @@ class TensorflowLite::Pipeline::Coordinator::Scaler
         @format_change.scale(input, @cropped_frame)
         input = @cropped_frame
       end
-      input = input.quick_crop(@top_crop, @left_crop, @top_crop, @left_crop)
+      input = input.quick_crop(@top_crop, @left_crop, @top_crop, @left_crop).as(FFmpeg::Frame)
     end
     @scaler.scale(input, @output_frame)
   end

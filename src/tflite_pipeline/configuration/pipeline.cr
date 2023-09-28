@@ -11,7 +11,7 @@ class TensorflowLite::Pipeline::Configuration::Pipeline
   #
   # NOTE:: use promise any to get result -> as we need to block tasker pipelines so we don't needlessly
   # process input images
-  property async : Bool = false
+  property? async : Bool = false
 
   property input : Input
   property output : Array(Model)

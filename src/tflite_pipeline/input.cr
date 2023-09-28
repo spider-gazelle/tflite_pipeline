@@ -5,7 +5,12 @@ abstract class TensorflowLite::Pipeline::Input
   abstract def start
   abstract def shutdown
 
-  getter next_frame : Channel(StumpyCore::Canvas) = Channel(StumpyCore::Canvas).new
+  # callback to grab format information for scaler setup
+  # format, width, height
+  def format(&@format_cb : FFmpeg::PixelFormat, Int32, Int32 ->)
+  end
+
+  getter next_frame : Channel(FFmpeg::Frame) = Channel(FFmpeg::Frame).new
   getter stats : Stats = Stats.new
   getter? ready : Bool = false
 
