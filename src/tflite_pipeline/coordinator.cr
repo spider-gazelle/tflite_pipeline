@@ -7,7 +7,9 @@ class TensorflowLite::Pipeline::Coordinator
     case input = @config.input
     in Configuration::InputImage
       @input = Input::Image.new
-    in Configuration::InputDevice, Configuration::InputStream
+    in Configuration::InputStream
+      @input = Input::Stream.new(input.path)
+    in Configuration::InputDevice
       raise NotImplementedError.new("not yet available")
     in Configuration::Input
       raise "abstract class, will never occur"
@@ -54,7 +56,7 @@ class TensorflowLite::Pipeline::Coordinator
 
   delegate stats, replay, ready?, ready_state_change, to: @input
 
-  def on_output(&@on_output : FFmpeg::Frame, Array(TensorflowLite::Image::Detection) ->)
+  def on_output(&@on_output : FFmpeg::Frame, Array(TensorflowLite::Image::Detection), Stats ->)
   end
 
   def run_pipeline
@@ -65,6 +67,8 @@ class TensorflowLite::Pipeline::Coordinator
       raise error
     end
 
+    local_stats = stats
+
     loop do
       # grab the next image from the input
       image = input.next_frame.receive
@@ -72,34 +76,36 @@ class TensorflowLite::Pipeline::Coordinator
       image_width = image.width
 
       begin
-        # scale the image to the size required for all the tasks
-        @scalers.each { |(scaler, _tasks)| scaler.scale(image) }
+        local_stats.record_time do
+          # scale the image to the size required for all the tasks
+          @scalers.each { |(scaler, _tasks)| scaler.scale(image) }
 
-        promises = @scalers.flat_map do |(scaler, tasks)|
-          # grab the scaled image for the tasks that work with this resolution
-          scaled_image = scaler.output_frame
+          promises = @scalers.flat_map do |(scaler, tasks)|
+            # grab the scaled image for the tasks that work with this resolution
+            scaled_image = scaler.output_frame
 
-          offset_top = scaler.top_crop
-          offset_left = scaler.left_crop
-          cropped_height = image_height - offset_top - offset_top
-          cropped_width = image_width - offset_left - offset_left
+            offset_top = scaler.top_crop
+            offset_left = scaler.left_crop
+            cropped_height = image_height - offset_top - offset_top
+            cropped_width = image_width - offset_left - offset_left
 
-          tasks.map do |task|
-            # process the image in parallel and ensure all results are normalised and
-            # adjusted for placement on the original parent image
-            Promise.defer do
-              # TODO:: need to run sub pipelines
-              task.detector.process(scaled_image).map do |detection|
-                detection.make_adjustment(cropped_width, cropped_height, image_width, image_height, offset_left, offset_top)
-                detection.as(TensorflowLite::Image::Detection)
+            tasks.map do |task|
+              # process the image in parallel and ensure all results are normalised and
+              # adjusted for placement on the original image
+              Promise.defer do
+                # TODO:: need to run sub pipelines
+                task.detector.process(scaled_image).map do |detection|
+                  detection.make_adjustment(cropped_width, cropped_height, image_width, image_height, offset_left, offset_top)
+                  detection.as(TensorflowLite::Image::Detection)
+                end
               end
             end
           end
+
+          results = Promise.all(promises).get.flatten
+
+          @on_output.try &.call(image, results, local_stats)
         end
-
-        results = Promise.all(promises).get.flatten
-
-        @on_output.try &.call(image, results)
       rescue error
         Log.warn(exception: error) { "processing frame" }
       end

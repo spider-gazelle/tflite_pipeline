@@ -1,4 +1,4 @@
-class Stats
+class TensorflowLite::Pipeline::Stats
   @counts = [0, 0]
   @sums = [0.seconds, 0.seconds]
   @index = 0
@@ -10,6 +10,13 @@ class Stats
   def add_time(time : Time::Span)
     update_min_max(time)
     update_average(time)
+  end
+
+  def record_time(&)
+    elapsed_time = Time.measure do
+      yield
+    end
+    add_time elapsed_time
   end
 
   # average over the last 20 -> 40 seconds
