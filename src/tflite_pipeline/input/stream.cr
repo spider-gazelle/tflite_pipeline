@@ -27,13 +27,27 @@ class TensorflowLite::Pipeline::Input::Stream < TensorflowLite::Pipeline::Input
     end
 
     spawn do
-      video.each_frame do |frame|
-        select
-        when @next_frame.send(frame)
-          sleep 0.02 if @input.is_a?(Path)
-        else
-          stats.skipped += 1
-          false
+      if @input.is_a?(Path)
+        # video file (this only exists for specs)
+        # hence why we sleep, to emulate frame pacing
+        video.each_frame do |frame|
+          select
+          when @next_frame.send(frame)
+            sleep 0.02
+          else
+            stats.skipped += 1
+            false
+          end
+        end
+      else
+        # Network video stream
+        video.each_frame do |frame|
+          select
+          when @next_frame.send(frame)
+          else
+            stats.skipped += 1
+            false
+          end
         end
       end
     end

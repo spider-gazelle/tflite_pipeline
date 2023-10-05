@@ -72,7 +72,7 @@ module TensorflowLite::Pipeline
       coord.run_pipeline
     end
 
-    it "works with video input", focus: true do
+    it "works with video input" do
       json = %({
         "name": "video",
         "aync": false,

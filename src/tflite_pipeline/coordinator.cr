@@ -3,6 +3,9 @@ require "./input"
 require "promise"
 
 class TensorflowLite::Pipeline::Coordinator
+  REPLAY_MOUNT_PATH = Path[ENV["REPLAY_MOUNT_PATH"]? || "/mnt/ramdisk"]
+  REPLAY_MEM_SIZE   = Path[ENV["REPLAY_MEM_SIZE"]? || "512M"]
+
   def initialize(@index : Int32, @config : Configuration::Pipeline)
     case input = @config.input
     in Configuration::InputImage
@@ -10,6 +13,7 @@ class TensorflowLite::Pipeline::Coordinator
     in Configuration::InputStream
       @input = Input::Stream.new(input.path)
     in Configuration::InputDevice
+      configure_ram_drive
       raise NotImplementedError.new("not yet available")
     in Configuration::Input
       raise "abstract class, will never occur"
@@ -28,6 +32,21 @@ class TensorflowLite::Pipeline::Coordinator
 
     @scalers = [] of Tuple(Scaler, Array(Configuration::Model))
     @input.format &->configure_task_scalers(FFmpeg::PixelFormat, Int32, Int32)
+  end
+
+  protected def configure_ram_drive
+    output = IO::Memory.new
+    status = Process.run("mount", output: output)
+    raise "failed to check for existing mount" unless status.success?
+
+    # NOTE:: this won't work in production running as a low privileged user
+    # sudo mkdir -p /mnt/ramdisk
+    # sudo mount -t tmpfs -o size=512M tmpfs /mnt/ramdisk
+    if !String.new(output.to_slice).includes?(REPLAY_MOUNT_PATH.to_s)
+      Dir.mkdir_p REPLAY_MOUNT_PATH
+      status = Process.run("mount", {"-t", "tmpfs", "-o", "size=#{REPLAY_MEM_SIZE}", "tmpfs", REPLAY_MOUNT_PATH.to_s})
+      raise "failed to mount ramdisk: #{REPLAY_MOUNT_PATH}" unless status.success?
+    end
   end
 
   protected def configure_task_scalers(format : FFmpeg::PixelFormat, width : Int32, height : Int32)

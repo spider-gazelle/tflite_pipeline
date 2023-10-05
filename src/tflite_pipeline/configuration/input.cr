@@ -24,11 +24,15 @@ module TensorflowLite::Pipeline::Configuration
   class InputDevice < Input
     property type : InputType = InputType::VideoDevice
 
-    # URI of the model
+    # Path of the hardware device, such as '/dev/video1'
     property path : String
     property width : Int32?
     property height : Int32?
     property format : String = "YUYV"
+
+    # multicast address for monitoring / replay
+    property multicast_ip : String
+    property multicast_port : Int32
   end
 
   class InputStream < Input

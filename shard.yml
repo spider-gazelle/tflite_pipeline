@@ -19,6 +19,7 @@ dependencies:
   # Low latency video frames
   v4l2:
     github: spider-gazelle/v4l2.cr
+    branch: master
 
   # async coordination
   promise:
