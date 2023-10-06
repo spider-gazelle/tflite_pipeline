@@ -11,10 +11,10 @@ class TensorflowLite::Pipeline::Coordinator
     in Configuration::InputImage
       @input = Input::Image.new
     in Configuration::InputStream
-      @input = Input::Stream.new(input.path)
+      @input = Input::Stream.new(@index, input.path, REPLAY_MOUNT_PATH)
     in Configuration::InputDevice
       configure_ram_drive
-      raise NotImplementedError.new("not yet available")
+      @input = Input::V4L2.new(input, REPLAY_MOUNT_PATH)
     in Configuration::Input
       raise "abstract class, will never occur"
     end

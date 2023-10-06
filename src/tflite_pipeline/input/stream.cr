@@ -1,22 +1,22 @@
-require "../input"
+require "./stream_replay"
 require "../stats"
 require "ffmpeg"
 
 class TensorflowLite::Pipeline::Input::Stream < TensorflowLite::Pipeline::Input
-  def initialize(path : String)
+  include Input::StreamReplay
+
+  def initialize(index : Int32, path : String, ram_drive : Path)
     if File.exists? path
       @input = Path.new(path)
     else
       @input = URI.parse(path)
     end
+
+    @replay_store = ram_drive / index.to_s
   end
 
   @input : Path | URI
   @video : FFmpeg::Video? = nil
-
-  def replay(before : Time::Span, after : Time::Span, & : File ->)
-    raise "not implemented"
-  end
 
   def start
     @video = video = FFmpeg::Video.open @input
@@ -26,8 +26,8 @@ class TensorflowLite::Pipeline::Input::Stream < TensorflowLite::Pipeline::Input
       update_state true
     end
 
-    spawn do
-      if @input.is_a?(Path)
+    if @input.is_a?(Path)
+      spawn do
         # video file (this only exists for specs)
         # hence why we sleep, to emulate frame pacing
         video.each_frame do |frame|
@@ -39,8 +39,11 @@ class TensorflowLite::Pipeline::Input::Stream < TensorflowLite::Pipeline::Input
             false
           end
         end
-      else
-        # Network video stream
+      end
+    else
+      # Network video stream
+      start_replay_capture(@input.to_s)
+      spawn do
         video.each_frame do |frame|
           select
           when @next_frame.send(frame)
@@ -55,6 +58,7 @@ class TensorflowLite::Pipeline::Input::Stream < TensorflowLite::Pipeline::Input
 
   def shutdown
     @video.try &.close
+    @replay_task.try &.close
     update_state false
   end
 end
