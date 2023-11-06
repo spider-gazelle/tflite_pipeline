@@ -34,6 +34,7 @@ class TensorflowLite::Pipeline::Coordinator
     @input.format &->configure_task_scalers(FFmpeg::PixelFormat, Int32, Int32)
   end
 
+  # ram drive for saving replays
   protected def configure_ram_drive
     output = IO::Memory.new
     status = Process.run("mount", output: output)
@@ -49,6 +50,7 @@ class TensorflowLite::Pipeline::Coordinator
     end
   end
 
+  # initialze the scalers on startup for improved performance
   protected def configure_task_scalers(format : FFmpeg::PixelFormat, width : Int32, height : Int32)
     scalers = {} of Tuple(Int32, Int32) => Scaler
     task_map = Hash(Tuple(Int32, Int32), Array(Configuration::Model)).new { |h, k| h[k] = [] of Configuration::Model }
