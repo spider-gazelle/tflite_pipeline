@@ -16,7 +16,8 @@ module TensorflowLite::Pipeline
         },{
           "type": "face_detection",
           "model_uri": "https://raw.githubusercontent.com/patlevin/face-detection-tflite/main/fdlite/data/face_detection_back.tflite",
-          "scaling_mode": "cover"
+          "scaling_mode": "cover",
+          "strides": [16, 32, 32, 32]
         },{
           "type": "pose_detection",
           "model_uri": "https://storage.googleapis.com/tfhub-lite-models/google/lite-model/movenet/singlepose/lightning/tflite/int8/4.tflite",
@@ -44,6 +45,9 @@ module TensorflowLite::Pipeline
       spawn { coord.input.as(Input::Image).process(image) }
 
       coord.run_pipeline
+      no_error = [] of Tuple(String, String)
+      coord.input_errors.should eq no_error
+      coord.output_errors.should eq no_error
     end
 
     it "works with video input" do
@@ -61,7 +65,8 @@ module TensorflowLite::Pipeline
         },{
           "type": "face_detection",
           "model_uri": "https://raw.githubusercontent.com/patlevin/face-detection-tflite/main/fdlite/data/face_detection_back.tflite",
-          "scaling_mode": "cover"
+          "scaling_mode": "cover",
+          "strides": [16, 32, 32, 32]
         },{
           "type": "pose_detection",
           "model_uri": "https://storage.googleapis.com/tfhub-lite-models/google/lite-model/movenet/singlepose/lightning/tflite/int8/4.tflite",
@@ -98,6 +103,9 @@ module TensorflowLite::Pipeline
       end
 
       coord.run_pipeline
+      no_error = [] of Tuple(String, String)
+      coord.input_errors.should eq no_error
+      coord.output_errors.should eq no_error
     end
   end
 end
