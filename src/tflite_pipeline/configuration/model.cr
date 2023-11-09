@@ -18,7 +18,7 @@ class TensorflowLite::Pipeline::Configuration::Model
   property strides : Array(Int32)? = nil
 
   # age estimation ranges
-  property age_ranges : Array(Array(Int32))? = nil
+  property age_ranges : Array(Int32)? = nil
 
   property pipeline : Array(Model) = [] of Model
 
@@ -95,8 +95,13 @@ class TensorflowLite::Pipeline::Configuration::Model
     in .age_estimation?
       age = Image::AgeEstimationRange.new(client)
       if ranges = age_ranges
-        ranges = ranges.map { |range| (range[0]..range[1]) }
-        age.ranges = ranges
+        maps = Array(Range(Int32, Int32)).new(ranges.size - 1)
+        ranges.each_with_index do |start, i|
+          limit = ranges[i + 1]?
+          next unless limit
+          maps << (start...limit)
+        end
+        age.ranges = maps
       end
       age
     in .gender_estimation?
