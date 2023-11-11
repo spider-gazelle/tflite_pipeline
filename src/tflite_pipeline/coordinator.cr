@@ -98,25 +98,28 @@ class TensorflowLite::Pipeline::Coordinator
 
       begin
         local_stats.record_time do
-          # scale the image to the size required for all the tasks
-          @scalers.each { |(scaler, _tasks)| scaler.scale(image) }
-
+          # process the image in parallel and ensure all results are normalised and
+          # adjusted for placement on the original image
           promises = @scalers.flat_map do |(scaler, tasks)|
             # grab the scaled image for the tasks that work with this resolution
-            scaled_image = scaler.output_frame
-
-            offset_top = scaler.top_crop
-            offset_left = scaler.left_crop
-            cropped_height = image_height - offset_top - offset_top
-            cropped_width = image_width - offset_left - offset_left
+            scale_task = Promise.defer { scaler.scale(image); nil }
 
             tasks.map do |task|
-              # process the image in parallel and ensure all results are normalised and
-              # adjusted for placement on the original image
               Promise.defer do
-                # TODO:: need to run sub pipelines
+                scale_task.get
+                scaled_image = scaler.output_frame
+
+                offset_top = scaler.top_crop
+                offset_left = scaler.left_crop
+                cropped_height = image_height - offset_top - offset_top
+                cropped_width = image_width - offset_left - offset_left
+
                 task.detector.process(scaled_image).map do |detection|
                   detection.make_adjustment(cropped_width, cropped_height, image_width, image_height, offset_left, offset_top)
+
+                  # TODO:: need to run sub pipelines
+                  # sub-pipeline scaling can't be pre-calculated as the input image is extracted from the frame
+
                   detection.as(TensorflowLite::Image::Detection)
                 end
               end

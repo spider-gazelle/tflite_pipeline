@@ -20,6 +20,10 @@ class TensorflowLite::Pipeline::Configuration::Model
   # age estimation ranges
   property age_ranges : Array(Int32)? = nil
 
+  # sub-pipelines only
+  # so we can apply things like pose detection only to "people" etc
+  property match_label : String? = nil
+
   property pipeline : Array(Model) = [] of Model
 
   # =====================================================
