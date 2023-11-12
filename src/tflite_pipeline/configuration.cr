@@ -1,5 +1,6 @@
 require "tflite_image"
 require "json"
+require "yaml"
 
 module TensorflowLite::Pipeline::Configuration
   enum ModelType

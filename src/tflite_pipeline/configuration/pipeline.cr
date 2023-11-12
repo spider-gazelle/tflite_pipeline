@@ -2,6 +2,7 @@ require "../configuration"
 
 class TensorflowLite::Pipeline::Configuration::Pipeline
   include JSON::Serializable
+  include YAML::Serializable
 
   property name : String
   property description : String?

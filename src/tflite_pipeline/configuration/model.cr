@@ -2,6 +2,7 @@ require "../configuration"
 
 class TensorflowLite::Pipeline::Configuration::Model
   include JSON::Serializable
+  include YAML::Serializable
 
   STORE = "model_storage"
 

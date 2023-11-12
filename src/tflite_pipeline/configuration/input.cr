@@ -9,8 +9,15 @@ module TensorflowLite::Pipeline::Configuration
 
   abstract class Input
     include JSON::Serializable
+    include YAML::Serializable
 
     use_json_discriminator "type", {
+      "image"        => InputImage,
+      "video_device" => InputDevice,
+      "video_stream" => InputStream,
+    }
+
+    use_yaml_discriminator "type", {
       "image"        => InputImage,
       "video_device" => InputDevice,
       "video_stream" => InputStream,
