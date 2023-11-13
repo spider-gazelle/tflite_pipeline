@@ -4,6 +4,8 @@ class TensorflowLite::Pipeline::Configuration::Pipeline
   include JSON::Serializable
   include YAML::Serializable
 
+  property index : Int32? = nil
+
   property name : String
   property description : String?
 
