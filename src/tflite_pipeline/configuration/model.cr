@@ -32,17 +32,21 @@ class TensorflowLite::Pipeline::Configuration::Model
   # =====================================================
 
   @[JSON::Field(ignore: true)]
+  @[YAML::Field(ignore: true)]
   property! scaler : Coordinator::Scaler
 
   @[JSON::Field(ignore_deserialize: true)]
+  @[YAML::Field(ignore_deserialize: true)]
   getter warnings : Array(String) = [] of String
 
   @[JSON::Field(ignore: true)]
+  @[YAML::Field(ignore: true)]
   getter model_path : Path do
     save_uri URI.parse(@model_uri)
   end
 
   @[JSON::Field(ignore: true)]
+  @[YAML::Field(ignore: true)]
   getter labels : Array(String)? do
     if uri = @label_uri
       File.read_lines save_uri(URI.new(uri))
@@ -66,6 +70,7 @@ class TensorflowLite::Pipeline::Configuration::Model
   end
 
   @[JSON::Field(ignore: true)]
+  @[YAML::Field(ignore: true)]
   getter client : TensorflowLite::Client do
     edge_tpu = tpu_delegate.presence
 
@@ -85,6 +90,7 @@ class TensorflowLite::Pipeline::Configuration::Model
   end
 
   @[JSON::Field(ignore: true)]
+  @[YAML::Field(ignore: true)]
   getter detector : Image::Common do
     case type
     in .object_detection?
