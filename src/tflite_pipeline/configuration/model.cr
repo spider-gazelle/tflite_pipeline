@@ -1,9 +1,6 @@
 require "../configuration"
 
-class TensorflowLite::Pipeline::Configuration::Model
-  include JSON::Serializable
-  include YAML::Serializable
-
+module TensorflowLite::Pipeline::Configuration::BaseModel
   STORE = "model_storage"
 
   property type : ModelType
@@ -24,8 +21,6 @@ class TensorflowLite::Pipeline::Configuration::Model
   # sub-pipelines only
   # so we can apply things like pose detection only to "people" etc
   property match_label : String? = nil
-
-  property pipeline : Array(Model) = [] of Model
 
   # =====================================================
   # for internal use, tracking where the files are stored
@@ -121,4 +116,18 @@ class TensorflowLite::Pipeline::Configuration::Model
       raise "not supported"
     end
   end
+end
+
+class TensorflowLite::Pipeline::Configuration::SubModel
+  include JSON::Serializable
+  include YAML::Serializable
+  include BaseModel
+end
+
+class TensorflowLite::Pipeline::Configuration::Model
+  include JSON::Serializable
+  include YAML::Serializable
+  include BaseModel
+
+  property pipeline : Array(SubModel) = [] of SubModel
 end
