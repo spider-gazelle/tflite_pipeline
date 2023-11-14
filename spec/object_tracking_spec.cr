@@ -18,7 +18,7 @@ module TensorflowLite::Pipeline
       })
 
       config = Configuration::Pipeline.from_json(json)
-      coord = Coordinator.new(0, config)
+      coord = Coordinator.new("0", config)
       coord.tasks[0].detector.resolution.should eq({448, 448})
 
       frames = 0

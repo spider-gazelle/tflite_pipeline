@@ -6,12 +6,12 @@ class TensorflowLite::Pipeline::Coordinator
   REPLAY_MOUNT_PATH = Path[ENV["REPLAY_MOUNT_PATH"]? || "/mnt/ramdisk"]
   REPLAY_MEM_SIZE   = Path[ENV["REPLAY_MEM_SIZE"]? || "512M"]
 
-  def initialize(@index : Int32, @config : Configuration::Pipeline)
+  def initialize(@id : String, @config : Configuration::Pipeline)
     case input = @config.input
     in Configuration::InputImage
       @input = Input::Image.new
     in Configuration::InputStream
-      @input = Input::Stream.new(@index, input.path, REPLAY_MOUNT_PATH)
+      @input = Input::Stream.new(@id, input.path, REPLAY_MOUNT_PATH)
     in Configuration::InputDevice
       configure_ram_drive
       @input = Input::V4L2.new(input, REPLAY_MOUNT_PATH)
@@ -68,7 +68,7 @@ class TensorflowLite::Pipeline::Coordinator
     @scalers = combined
   end
 
-  getter index : Int32
+  getter id : String
   getter input : Input
   getter tasks : Array(Configuration::Model)
   getter input_errors : Array(Tuple(String, String))

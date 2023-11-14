@@ -5,14 +5,14 @@ require "ffmpeg"
 class TensorflowLite::Pipeline::Input::Stream < TensorflowLite::Pipeline::Input
   include Input::StreamReplay
 
-  def initialize(index : Int32, path : String, ram_drive : Path)
+  def initialize(id : String, path : String, ram_drive : Path)
     if File.exists? path
       @input = Path.new(path)
     else
       @input = URI.parse(path)
     end
 
-    @replay_store = ram_drive / index.to_s
+    @replay_store = ram_drive / id
   end
 
   @input : Path | URI
