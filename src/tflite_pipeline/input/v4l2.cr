@@ -53,22 +53,27 @@ class TensorflowLite::Pipeline::Input::V4L2 < TensorflowLite::Pipeline::Input
     width = format.width
     height = format.height
 
-    # grab the frames
-    case format_code
+    ffmpeg_format = case format_code
     when "YUYV"
-      spawn do
-        video.stream do |buffer|
-          v4l2_frame = FFmpeg::Frame.new(width, height, :yuyv422, buffer: buffer)
-          select
-          when @next_frame.send(v4l2_frame)
-          else
-            stats.skipped += 1
-            false
-          end
+      FFmpeg::LibAV::PixelFormat::Yuv420P
+    when "UYVY"
+      FFmpeg::LibAV::PixelFormat::Yuyv422
+    end
+
+    raise "unsupported V4L2 pixel format: #{format_code}" unless ffmpeg_format
+
+    # grab the frames
+    @format_cb.try &.call(ffmpeg_format, width.to_i, height.to_i)
+    spawn do
+      video.stream do |buffer|
+        v4l2_frame = FFmpeg::Frame.new(width, height, ffmpeg_format, buffer: buffer)
+        select
+        when @next_frame.send(v4l2_frame)
+        else
+          stats.skipped += 1
+          false
         end
       end
-    else
-      raise "unsupported V4L2 pixel format: #{format_code}"
     end
 
     update_state true
