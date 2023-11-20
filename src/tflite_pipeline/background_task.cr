@@ -8,10 +8,12 @@ class TensorflowLite::Pipeline::BackgroundTask
     @mutex.synchronize do
       on_exit.close
       if proc = @process
-        proc.terminate
+        proc.terminate rescue nil
       end
       @process = nil
     end
+  rescue error
+    Log.warn { error.message }
   end
 
   def finalize
