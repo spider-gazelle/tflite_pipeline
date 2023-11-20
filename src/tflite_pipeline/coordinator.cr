@@ -4,7 +4,7 @@ require "promise"
 
 class TensorflowLite::Pipeline::Coordinator
   REPLAY_MOUNT_PATH = Path[ENV["REPLAY_MOUNT_PATH"]? || "/mnt/ramdisk"]
-  REPLAY_MEM_SIZE   = Path[ENV["REPLAY_MEM_SIZE"]? || "512M"]
+  REPLAY_MEM_SIZE   = ENV["REPLAY_MEM_SIZE"]? || "512M"
 
   def initialize(@id : String, @config : Configuration::Pipeline)
     case input = @config.input
