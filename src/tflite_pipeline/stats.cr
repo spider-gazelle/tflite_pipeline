@@ -19,13 +19,22 @@ class TensorflowLite::Pipeline::Stats
     add_time elapsed_time
   end
 
+  ZERO_SECONDS = 0.seconds
+
   # average over the last 20 -> 40 seconds
   def average : Time::Span
-    @sums.sum / @counts.sum
+    count = @counts.sum
+    return ZERO_SECONDS if count.zero?
+    @sums.sum / count
   end
 
-  def fps
-    1000.0 / average.total_milliseconds
+  def average_milliseconds
+    average.total_milliseconds
+  end
+
+  def fps(ms = average_milliseconds)
+    return 0.0 if ms.zero?
+    1000.0 / ms
   end
 
   private def update_min_max(time : Time::Span)

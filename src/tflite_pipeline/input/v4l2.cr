@@ -54,11 +54,11 @@ class TensorflowLite::Pipeline::Input::V4L2 < TensorflowLite::Pipeline::Input
     height = format.height
 
     ffmpeg_format = case format_code
-    when "YUYV"
-      FFmpeg::LibAV::PixelFormat::Yuv420P
-    when "UYVY"
-      FFmpeg::LibAV::PixelFormat::Yuyv422
-    end
+                    when "YUYV"
+                      FFmpeg::LibAV::PixelFormat::Yuv420P
+                    when "UYVY"
+                      FFmpeg::LibAV::PixelFormat::Yuyv422
+                    end
 
     raise "unsupported V4L2 pixel format: #{format_code}" unless ffmpeg_format
 
