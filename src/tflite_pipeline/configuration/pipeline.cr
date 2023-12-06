@@ -13,6 +13,8 @@ class TensorflowLite::Pipeline::Configuration::Pipeline
   # NOTE:: use promise any to get result -> as we need to block tasker pipelines so we don't needlessly
   # process input images
   property? async : Bool = false
+  property? track_objects : Bool = false
+  property min_score : Float32 = 0.2_f32
 
   property input : Input
   property output : Array(Model)

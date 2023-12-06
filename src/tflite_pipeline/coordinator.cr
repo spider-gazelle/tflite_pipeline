@@ -1,6 +1,12 @@
+require "./object_tracking"
 require "./configuration"
 require "./input"
 require "promise"
+
+# provide a method for tracking objects
+module TensorflowLite::Image::Detection::BoundingBox
+  property uuid : String? = nil
+end
 
 class TensorflowLite::Pipeline::Coordinator
   REPLAY_MOUNT_PATH = Path[ENV["REPLAY_MOUNT_PATH"]? || "/mnt/ramdisk"]
@@ -32,6 +38,8 @@ class TensorflowLite::Pipeline::Coordinator
 
     @scalers = [] of Tuple(Scaler, Array(Configuration::Model))
     @input.format &->configure_task_scalers(FFmpeg::PixelFormat, Int32, Int32)
+    @tracker = @config.track_objects? ? ObjectTracking.new : nil
+    @min_score = @config.min_score
   end
 
   # ram drive for saving replays
@@ -73,7 +81,9 @@ class TensorflowLite::Pipeline::Coordinator
   getter tasks : Array(Configuration::Model)
   getter input_errors : Array(Tuple(String, String))
   getter output_errors : Array(Tuple(String, String))
+  getter tracker : ObjectTracking? = nil
   getter? shutdown : Bool = false
+  getter min_score : Float32
 
   delegate stats, replay, ready?, ready_state_change, to: @input
 
@@ -89,6 +99,9 @@ class TensorflowLite::Pipeline::Coordinator
     end
 
     local_stats = stats
+    local_tracker = tracker
+    local_min_score = min_score
+    results = uninitialized Array(TensorflowLite::Image::Detection)
 
     loop do
       # grab the next image from the input
@@ -126,10 +139,32 @@ class TensorflowLite::Pipeline::Coordinator
             end
           end
 
-          results = Promise.all(promises).get.flatten
+          # remove detections that don't meet the threshold
+          results = Promise.all(promises).get.flatten.reject! do |detection|
+            case detection
+            when TensorflowLite::Image::Detection::Classification
+              next true unless detection.score > local_min_score
+            end
+            false
+          end
 
-          @on_output.try &.call(image, results, local_stats)
+          # apply object tracking, giving each object a unique id
+          if local_tracker
+            objects = results.compact_map do |detection|
+              case detection
+              when TensorflowLite::Image::Detection::BoundingBox
+                detection
+              end
+            end
+
+            local_tracker.track objects
+            local_tracker.tracks.each do |track|
+              track.detection.uuid = track.uuid.to_s
+            end
+          end
         end
+
+        @on_output.try &.call(image, results, local_stats)
       rescue error
         Log.warn(exception: error) { "processing frame" }
       end
