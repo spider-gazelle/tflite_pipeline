@@ -120,5 +120,80 @@ module TensorflowLite::Pipeline
       coord.input_errors.should eq no_error
       coord.output_errors.should eq no_error
     end
+
+    if Dir.glob("/dev/video*").size > 0
+      it "works with V4L2 input" do
+        json = %({
+          "name": "video",
+          "aync": false,
+          "min_score": 0.01,
+          "input": {
+            "type": "video_device",
+            "path": "/dev/video2",
+            "width": 640,
+            "height": 480,
+            "format": "YUYV",
+            "multicast_ip": "224.0.0.1",
+            "multicast_port": 5000
+          },
+          "output": [{
+            "type": "object_detection",
+            "model_uri": "https://storage.googleapis.com/tfhub-lite-models/tensorflow/lite-model/efficientdet/lite2/detection/metadata/1.tflite",
+            "scaling_mode": "cover"
+          },{
+            "type": "face_detection",
+            "model_uri": "https://raw.githubusercontent.com/patlevin/face-detection-tflite/main/fdlite/data/face_detection_back.tflite",
+            "scaling_mode": "cover",
+            "strides": [16, 32, 32, 32],
+            "pipeline": [
+              {
+                "type": "gender_estimation",
+                "model_uri": "https://os.place.tech/neural_nets/gender/model_lite_gender_q.tflite",
+                "scaling_mode": "cover"
+              },
+              {
+                "type": "age_estimation",
+                "model_uri": "https://os.place.tech/neural_nets/age/age_range.tflite",
+                "scaling_mode": "cover",
+                "age_ranges": [0, 7, 9, 12, 20, 28, 36, 46, 61]
+              }
+            ]
+          }]
+        })
+
+        config = Configuration::Pipeline.from_json(json)
+        coord = Coordinator.new("0", config)
+        coord.tasks[0].detector.resolution.should eq({448, 448})
+
+        frames = 0
+        files = 0
+
+        coord.on_output do |image, detections, stats|
+          frames += 1
+
+          if frames % 20 == 0
+            canvas = image.to_canvas
+            detections.each do |detect|
+              puts "-- #{detect.type} --"
+              puts detect.to_json
+              puts "-----"
+              detect.markup(canvas, font: FONT)
+            end
+            StumpyPNG.write(canvas, "./bin/v4l2_output#{files}.png")
+
+            files += 1
+          end
+          if files >= 3
+            coord.shutdown
+            puts "FPS: #{stats.fps}, Skipped: #{stats.skipped}"
+          end
+        end
+
+        coord.run_pipeline
+        no_error = [] of Tuple(String, String)
+        coord.input_errors.should eq no_error
+        coord.output_errors.should eq no_error
+      end
+    end
   end
 end
