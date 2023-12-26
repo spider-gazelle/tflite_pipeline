@@ -1,6 +1,8 @@
 module GreedyAlgorithm
   def self.find_assignment(cost_matrix : Array(Array(Float64))) : Array(Tuple(Int32, Int32))
     assignment = [] of Tuple(Int32, Int32)
+    return assignment if cost_matrix.size == 0
+
     remaining_rows = (0...cost_matrix.size).to_a
     remaining_cols = (0...cost_matrix[0].size).to_a
 
