@@ -52,23 +52,23 @@ module TensorflowLite::Pipeline::Input::StreamReplay
     created_after = before.ago
     sleep after # wait for future files to be generated
 
-    file_list = File.tempname("replay-", ".txt")
-    output_file = File.tempname("replay-", ".ts")
+    file_list = File.tempname("replay", ".txt")
+    output_file = File.tempname("replay", ".ts")
     begin
       replay_file = @replay_mutex.synchronize do
         construct_replay(file_list, output_file, created_after)
       end
       yield replay_file
     ensure
-      File.delete output_file
-      File.delete file_list
+      File.delete? output_file
+      File.delete? file_list
     end
   end
 
   protected def construct_replay(file_list : String, output_file : String, created_after : Time) : File
     files = Dir.entries(@replay_store).select do |file|
       next if {".", ".."}.includes?(file)
-      file = File.join(@replay_store, "../", file)
+      file = File.join(@replay_store, file)
 
       begin
         info = File.info(file)
