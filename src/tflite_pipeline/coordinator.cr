@@ -39,7 +39,6 @@ class TensorflowLite::Pipeline::Coordinator
     @scalers = [] of Tuple(Scaler, Array(Configuration::Model))
     @input.format &->configure_task_scalers(FFmpeg::PixelFormat, Int32, Int32)
     @tracker = @config.track_objects? ? ObjectTracking.new : nil
-    @min_score = @config.min_score
   end
 
   # ram drive for saving replays
@@ -83,7 +82,6 @@ class TensorflowLite::Pipeline::Coordinator
   getter output_errors : Array(Tuple(String, String))
   getter tracker : ObjectTracking? = nil
   getter? shutdown : Bool = false
-  getter min_score : Float32
 
   delegate stats, replay, ready?, ready_state_change, to: @input
 
@@ -100,7 +98,6 @@ class TensorflowLite::Pipeline::Coordinator
 
     local_stats = stats
     local_tracker = tracker
-    local_min_score = min_score
     results = uninitialized Array(TensorflowLite::Image::Detection)
 
     loop do
@@ -111,42 +108,8 @@ class TensorflowLite::Pipeline::Coordinator
 
       begin
         local_stats.record_time do
-          # process the image in parallel and ensure all results are normalised and
-          # adjusted for placement on the original image
-          promises = @scalers.flat_map do |(scaler, tasks)|
-            # grab the scaled image for the tasks that work with this resolution
-            scale_task = Promise.defer { scaler.scale(image); nil }
-
-            tasks.map do |task|
-              Promise.defer do
-                scale_task.get
-                scaled_image = scaler.output_frame
-
-                offset_top = scaler.top_crop
-                offset_left = scaler.left_crop
-                cropped_height = image_height - offset_top - offset_top
-                cropped_width = image_width - offset_left - offset_left
-
-                task.detector.process(scaled_image).map do |detection|
-                  detection.make_adjustment(cropped_width, cropped_height, image_width, image_height, offset_left, offset_top)
-
-                  # TODO:: need to run sub pipelines
-                  # sub-pipeline scaling can't be pre-calculated as the input image is extracted from the frame
-
-                  detection.as(TensorflowLite::Image::Detection)
-                end
-              end
-            end
-          end
-
-          # remove detections that don't meet the threshold
-          results = Promise.all(promises).get.flatten.reject! do |detection|
-            case detection
-            when TensorflowLite::Image::Detection::Classification
-              next true unless detection.score > local_min_score
-            end
-            false
-          end
+          # run detections over the video frame
+          results = process_frame(image, image_height, image_width)
 
           # apply object tracking, giving each object a unique id
           if local_tracker
@@ -181,6 +144,79 @@ class TensorflowLite::Pipeline::Coordinator
   def shutdown
     @shutdown = true
     @input.shutdown
+  end
+
+  def process_frame(image : FFmpeg::Frame, image_height : Int32, image_width : Int32)
+    # process the image in parallel and ensure all results are normalised and
+    # adjusted for placement on the original image
+    promises = @scalers.flat_map do |(scaler, tasks)|
+      # grab the scaled image for the tasks that work with this resolution
+      scale_task = Promise.defer { scaler.scale(image); nil }
+
+      tasks.map do |task|
+        Promise.defer do
+          scale_task.get
+          scaled_image = scaler.output_frame
+
+          offset_top = scaler.top_crop
+          offset_left = scaler.left_crop
+          cropped_height = image_height - offset_top - offset_top
+          cropped_width = image_width - offset_left - offset_left
+          local_min_score = task.min_score
+
+          task.detector.process(scaled_image).compact_map do |detection|
+            # remove detections that don't meet the threshold
+            # also skips processing these detections
+            case detection
+            when TensorflowLite::Image::Detection::Classification
+              next unless detection.score > local_min_score
+            end
+
+            detection.make_adjustment(cropped_width, cropped_height, image_width, image_height, offset_left, offset_top)
+
+            # sub-pipeline scaling can't be pre-calculated as the input image is extracted from the frame
+            if task.pipeline.size > 0
+              detection.associated = Promise.all(task.pipeline.map { |sub_task|
+                # process Configuration::SubModel in parallel
+                Promise.defer { process_subtask(image, image_width, image_height, detection, sub_task) }
+              }).get.flatten
+            end
+
+            detection
+          end.map(&.as(TensorflowLite::Image::Detection))
+        end
+      end
+    end
+    Promise.all(promises).get.flatten
+  end
+
+  NO_OUTPUT = [] of TensorflowLite::Image::Detection
+
+  # extracts the bounding boxes of items in the original image for additional processing
+  protected def process_subtask(image, image_width, image_height, detection, task : Configuration::SubModel) : Array(TensorflowLite::Image::Detection)
+    detector = task.detector
+    required_aspect_ratio = detector.aspect_ratio
+
+    case detection
+    when TensorflowLite::Image::FaceDetection::Output
+      # TODO:: rotate the face before processing
+      # https://pyimagesearch.com/2017/05/22/face-alignment-with-opencv-and-python/
+      pixels = detection.adjust_bounding_box(required_aspect_ratio, image_width, image_height)
+    when TensorflowLite::Image::Detection::BoundingBox
+      pixels = detection.adjust_bounding_box(required_aspect_ratio, image_width, image_height)
+    end
+
+    return NO_OUTPUT unless pixels
+
+    # crop uses CSS style coordinates
+    detection_cropped = image.crop(pixels[:top], pixels[:left], image_height - pixels[:bottom], image_width - pixels[:right])
+    detection_scaled = FFmpeg::SWScale.scale(detection_cropped, *detector.resolution)
+
+    # run through any sub models
+    task.detector.process(detection_scaled).map(&.as(TensorflowLite::Image::Detection))
+  rescue error
+    Log.error(exception: error) { "processing pipeline subtask" }
+    NO_OUTPUT
   end
 end
 

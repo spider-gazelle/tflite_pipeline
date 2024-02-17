@@ -7,6 +7,7 @@ module TensorflowLite::Pipeline::Configuration::BaseModel
   property model_uri : String        # => URI
   property label_uri : String? = nil # => URI or Nil
   property scaling_mode : Scale      # fit or cover (letterbox or crop)
+  property min_score : Float32 = 0.2_f32
 
   # hardware acceleration
   property tpu_delegate : String? = nil

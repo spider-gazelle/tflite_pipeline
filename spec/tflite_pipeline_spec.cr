@@ -17,7 +17,20 @@ module TensorflowLite::Pipeline
           "type": "face_detection",
           "model_uri": "https://raw.githubusercontent.com/patlevin/face-detection-tflite/main/fdlite/data/face_detection_back.tflite",
           "scaling_mode": "cover",
-          "strides": [16, 32, 32, 32]
+          "strides": [16, 32, 32, 32],
+          "pipeline": [
+            {
+              "type": "gender_estimation",
+              "model_uri": "https://os.place.tech/neural_nets/gender/model_lite_gender_q.tflite",
+              "scaling_mode": "cover"
+            },
+            {
+              "type": "age_estimation",
+              "model_uri": "https://os.place.tech/neural_nets/age/age_range.tflite",
+              "scaling_mode": "cover",
+              "age_ranges": [0, 7, 9, 12, 20, 28, 36, 46, 61]
+            }
+          ]
         },{
           "type": "pose_detection",
           "model_uri": "https://storage.googleapis.com/tfhub-lite-models/google/lite-model/movenet/singlepose/lightning/tflite/int8/4.tflite",

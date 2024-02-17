@@ -2,6 +2,15 @@ require "../coordinator"
 require "ffmpeg"
 
 class TensorflowLite::Pipeline::Coordinator::Scaler
+  QUICK_CROP_FORMATS = {
+    FFmpeg::PixelFormat::Yuv420P,
+    FFmpeg::PixelFormat::Yuvj420P,
+    FFmpeg::PixelFormat::Rgb24,
+    FFmpeg::PixelFormat::Bgr24,
+    FFmpeg::PixelFormat::Rgb48Le,
+    FFmpeg::PixelFormat::Rgb48Be,
+  }
+
   def initialize(
     @input_format : FFmpeg::PixelFormat,
     @input_width : Int32,
@@ -16,14 +25,7 @@ class TensorflowLite::Pipeline::Coordinator::Scaler
     cropped_height = @input_height - @top_crop - @top_crop
 
     # can we crop, scale and convert format in the same operation?
-    @fast_path = @requires_cropping && {
-      FFmpeg::PixelFormat::Yuv420P,
-      FFmpeg::PixelFormat::Yuvj420P,
-      FFmpeg::PixelFormat::Rgb24,
-      FFmpeg::PixelFormat::Bgr24,
-      FFmpeg::PixelFormat::Rgb48Le,
-      FFmpeg::PixelFormat::Rgb48Be,
-    }.includes? @input_format
+    @fast_path = @requires_cropping && QUICK_CROP_FORMATS.includes?(@input_format)
 
     # setup the buffers for storing the results
     @output_frame = FFmpeg::Frame.new(@desired_width, @desired_height, :rgb24)
