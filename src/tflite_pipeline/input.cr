@@ -22,9 +22,9 @@ abstract class TensorflowLite::Pipeline::Input
 
   protected def update_state(state : Bool)
     @ready = state
-    @ready_state_change.each do |cb|
+    @ready_state_change.each do |callback|
       begin
-        cb.call state
+        callback.call state
       rescue error
         Log.warn(exception: error) { "in ready state change callback" }
       end

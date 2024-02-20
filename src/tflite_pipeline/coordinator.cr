@@ -60,7 +60,7 @@ class TensorflowLite::Pipeline::Coordinator
   # initialze the scalers on startup for improved performance
   protected def configure_task_scalers(format : FFmpeg::PixelFormat, width : Int32, height : Int32)
     scalers = {} of Tuple(Int32, Int32) => Scaler
-    task_map = Hash(Tuple(Int32, Int32), Array(Configuration::Model)).new { |h, k| h[k] = [] of Configuration::Model }
+    task_map = Hash(Tuple(Int32, Int32), Array(Configuration::Model)).new { |hash, key| hash[key] = [] of Configuration::Model }
 
     # create the scalers and task map
     @tasks.each do |task|
@@ -175,12 +175,7 @@ class TensorflowLite::Pipeline::Coordinator
             detection.make_adjustment(cropped_width, cropped_height, image_width, image_height, offset_left, offset_top)
 
             # sub-pipeline scaling can't be pre-calculated as the input image is extracted from the frame
-            if task.pipeline.size > 0
-              detection.associated = Promise.all(task.pipeline.map { |sub_task|
-                # process Configuration::SubModel in parallel
-                Promise.defer { process_subtask(image, image_width, image_height, detection, sub_task) }
-              }).get.flatten
-            end
+            process_pipeline(image, image_width, image_height, detection, task.pipeline) if task.pipeline.size > 0
 
             detection
           end.map(&.as(TensorflowLite::Image::Detection))
@@ -190,13 +185,24 @@ class TensorflowLite::Pipeline::Coordinator
     Promise.all(promises).get.flatten
   end
 
-  NO_OUTPUT = [] of TensorflowLite::Image::Detection
+  protected def process_pipeline(image : FFmpeg::Frame, image_width : Int32, image_height : Int32, detection : TensorflowLite::Image::Detection, pipeline)
+    # crop
+    crops_required = pipeline.group_by(&.detector.aspect_ratio)
+    crops = crops_required.transform_keys do |aspect_ratio|
+      crop_image(image, image_width, image_height, detection, aspect_ratio)
+    end
+
+    # scale and detect in parallel
+    detection.associated = Promise.all(crops.compact_map { |(detection_cropped, sub_tasks)|
+      next unless detection_cropped
+      sub_tasks.map do |sub_task|
+        Promise.defer { process_detection(detection_cropped, sub_task).as(Array(TensorflowLite::Image::Detection)) }
+      end
+    }.flatten).get.flatten
+  end
 
   # extracts the bounding boxes of items in the original image for additional processing
-  protected def process_subtask(image, image_width, image_height, detection, task : Configuration::SubModel) : Array(TensorflowLite::Image::Detection)
-    detector = task.detector
-    required_aspect_ratio = detector.aspect_ratio
-
+  protected def crop_image(image, image_width, image_height, detection, required_aspect_ratio) : FFmpeg::Frame?
     case detection
     when TensorflowLite::Image::FaceDetection::Output
       # TODO:: rotate the face before processing
@@ -206,11 +212,20 @@ class TensorflowLite::Pipeline::Coordinator
       pixels = detection.adjust_bounding_box(required_aspect_ratio, image_width, image_height)
     end
 
-    return NO_OUTPUT unless pixels
+    return unless pixels
 
     # crop uses CSS style coordinates
-    detection_cropped = image.crop(pixels[:top], pixels[:left], image_height - pixels[:bottom], image_width - pixels[:right])
-    detection_scaled = FFmpeg::SWScale.scale(detection_cropped, *detector.resolution)
+    image.crop(pixels[:top], pixels[:left], image_height - pixels[:bottom], image_width - pixels[:right])
+  rescue error
+    Log.error(exception: error) { "cropping detection" }
+    nil
+  end
+
+  NO_OUTPUT = [] of TensorflowLite::Image::Detection
+
+  # extracts the bounding boxes of items in the original image for additional processing
+  protected def process_detection(detection_cropped : FFmpeg::Frame, task : Configuration::SubModel) : Array(TensorflowLite::Image::Detection)
+    detection_scaled = FFmpeg::SWScale.scale(detection_cropped, *task.detector.resolution)
 
     # run through any sub models
     task.detector.process(detection_scaled).map(&.as(TensorflowLite::Image::Detection))

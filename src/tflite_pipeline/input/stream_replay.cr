@@ -73,7 +73,7 @@ module TensorflowLite::Pipeline::Input::StreamReplay
       begin
         info = File.info(file)
         !info.size.zero? && info.modification_time >= created_after
-      rescue err : File::NotFoundError
+      rescue e : File::NotFoundError
         nil
       rescue error
         puts "Error obtaining file info for #{file}\n#{error.inspect_with_backtrace}"
