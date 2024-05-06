@@ -123,6 +123,11 @@ class TensorflowLite::Pipeline::Configuration::SubModel
   include JSON::Serializable
   include YAML::Serializable
   include BaseModel
+
+  def reset_tflite : Nil
+    # as we are probably powering off the USB
+    @client = nil if tpu_delegate.try(&.includes?("usb"))
+  end
 end
 
 class TensorflowLite::Pipeline::Configuration::Model
@@ -131,4 +136,10 @@ class TensorflowLite::Pipeline::Configuration::Model
   include BaseModel
 
   property pipeline : Array(SubModel) = [] of SubModel
+
+  def reset_tflite : Nil
+    # as we are probably powering off the USB
+    @client = nil if tpu_delegate.try(&.includes?("usb"))
+    pipeline.each(&.reset_tflite)
+  end
 end

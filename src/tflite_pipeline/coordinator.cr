@@ -88,62 +88,73 @@ class TensorflowLite::Pipeline::Coordinator
   def on_output(&@on_output : FFmpeg::Frame, Array(TensorflowLite::Image::Detection), Stats ->)
   end
 
+  @version_mutex : Mutex = Mutex.new
+  getter version : UInt64 = 0_u64
+
   def run_pipeline
-    begin
-      input.start
-    rescue error
-      @input_errors << {@config.input.to_json, error.message || error.inspect_with_backtrace}
-      raise error
+    run_version = @version_mutex.synchronize do
+      @version += 1
+      @version
     end
 
-    local_stats = stats
-    local_tracker = tracker
-    results = uninitialized Array(TensorflowLite::Image::Detection)
-
-    loop do
-      # grab the next image from the input
-      image = input.next_frame.receive
-      image_height = image.height
-      image_width = image.width
-
+    begin
       begin
-        local_stats.record_time do
-          # run detections over the video frame
-          results = process_frame(image, image_height, image_width)
-
-          # apply object tracking, giving each object a unique id
-          if local_tracker
-            objects = results.compact_map do |detection|
-              case detection
-              when TensorflowLite::Image::Detection::BoundingBox
-                detection
-              end
-            end
-
-            local_tracker.track objects
-            local_tracker.tracks.each do |track|
-              track.detection.uuid = track.uuid.to_s
-            end
-          end
-        end
-
-        @on_output.try &.call(image, results, local_stats)
+        input.start
       rescue error
-        Log.warn(exception: error) { "processing frame" }
+        @input_errors << {@config.input.to_json, error.message || error.inspect_with_backtrace}
+        raise error
       end
 
-      break if @shutdown
-    end
-  rescue error
-    unless @shutdown
-      Log.error(exception: error) { "running pipeline" }
-      shutdown
+      local_stats = stats
+      local_tracker = tracker
+      results = uninitialized Array(TensorflowLite::Image::Detection)
+
+      loop do
+        # grab the next image from the input
+        image = input.next_frame.receive
+        image_height = image.height
+        image_width = image.width
+
+        begin
+          local_stats.record_time do
+            # run detections over the video frame
+            results = process_frame(image, image_height, image_width)
+
+            # apply object tracking, giving each object a unique id
+            if local_tracker
+              objects = results.compact_map do |detection|
+                case detection
+                when TensorflowLite::Image::Detection::BoundingBox
+                  detection
+                end
+              end
+
+              local_tracker.track objects
+              local_tracker.tracks.each do |track|
+                track.detection.uuid = track.uuid.to_s
+              end
+            end
+          end
+
+          @on_output.try &.call(image, results, local_stats)
+        rescue error
+          Log.warn(exception: error) { "processing frame" }
+        end
+
+        break if run_version != version
+      end
+    rescue error
+      unless run_version != version
+        Log.error(exception: error) { "running pipeline" }
+        shutdown
+      end
     end
   end
 
   def shutdown
-    @shutdown = true
+    @version_mutex.synchronize { @version += 1 }
     @input.shutdown
+    @config.output.each(&.reset_tflite)
   end
 
   def process_frame(image : FFmpeg::Frame, image_height : Int32, image_width : Int32)
