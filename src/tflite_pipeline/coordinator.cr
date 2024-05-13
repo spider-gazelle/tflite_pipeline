@@ -9,6 +9,7 @@ module TensorflowLite::Image::Detection::BoundingBox
 end
 
 class TensorflowLite::Pipeline::Coordinator
+  REPLAY_CONFIGURE_RAMDISK = ENV["REPLAY_CONFIGURE_RAMDISK"]? == "true"
   REPLAY_MOUNT_PATH = Path[ENV["REPLAY_MOUNT_PATH"]? || "/mnt/ramdisk"]
   REPLAY_MEM_SIZE   = ENV["REPLAY_MEM_SIZE"]? || "512M"
 
@@ -19,7 +20,7 @@ class TensorflowLite::Pipeline::Coordinator
     in Configuration::InputStream
       @input = Input::Stream.new(@id, input.path, REPLAY_MOUNT_PATH)
     in Configuration::InputDevice
-      configure_ram_drive
+      configure_ram_drive if REPLAY_CONFIGURE_RAMDISK
       @input = Input::V4L2.new(input, REPLAY_MOUNT_PATH)
     in Configuration::Input
       raise "abstract class, will never occur"
