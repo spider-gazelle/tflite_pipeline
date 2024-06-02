@@ -10,8 +10,8 @@ end
 
 class TensorflowLite::Pipeline::Coordinator
   REPLAY_CONFIGURE_RAMDISK = ENV["REPLAY_CONFIGURE_RAMDISK"]? == "true"
-  REPLAY_MOUNT_PATH = Path[ENV["REPLAY_MOUNT_PATH"]? || "/mnt/ramdisk"]
-  REPLAY_MEM_SIZE   = ENV["REPLAY_MEM_SIZE"]? || "512M"
+  REPLAY_MOUNT_PATH        = Path[ENV["REPLAY_MOUNT_PATH"]? || "/mnt/ramdisk"]
+  REPLAY_MEM_SIZE          = ENV["REPLAY_MEM_SIZE"]? || "512M"
 
   def initialize(@id : String, @config : Configuration::Pipeline)
     case input = @config.input

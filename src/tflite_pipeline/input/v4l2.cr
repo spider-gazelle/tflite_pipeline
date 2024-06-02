@@ -13,17 +13,21 @@ class TensorflowLite::Pipeline::Input::V4L2 < TensorflowLite::Pipeline::Input
     @device = path = Path[config.path]
     video = ::V4L2::Video.new(path)
     format = video.supported_formats.find! { |form| form.code == config.format }
-    resolution = format.frame_sizes.find! do |frame|
+    @width = config.width.as(Int32).to_u32
+    @height = config.height.as(Int32).to_u32
+
+    @resolution = format.frame_sizes.find! do |frame|
       if frame.type.discrete?
-        frame.width == config.width && frame.height == config.height
+        frame.width == @width && frame.height == @height
       else
-        config.width >= frame.min_width && config.width <= frame.max_width && config.height >= frame.min_height && config.height <= frame.max_height
+        @width >= frame.min_width &&
+          @width <= frame.max_width &&
+          @height >= frame.min_height &&
+          @height <= frame.max_height
       end
     end
     video.close
 
-    @width = config.width
-    @height = config.height
     @multicast_address = Socket::IPAddress.new(config.multicast_ip, config.multicast_port)
     @replay_store = ram_drive / @device.stem
   end
@@ -60,7 +64,7 @@ class TensorflowLite::Pipeline::Input::V4L2 < TensorflowLite::Pipeline::Input
       resolution.format_id,
       width,
       width,
-      V4L2::BufferType::VIDEO_CAPTURE
+      ::V4L2::BufferType::VIDEO_CAPTURE
     ).request_buffers(1)
 
     format_code = ::V4L2::PixelFormat.pixel_format_chars(resolution.format_id)
