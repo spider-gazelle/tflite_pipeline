@@ -13,18 +13,27 @@ class TensorflowLite::Pipeline::Input::V4L2 < TensorflowLite::Pipeline::Input
     @device = path = Path[config.path]
     video = ::V4L2::Video.new(path)
     format = video.supported_formats.find! { |form| form.code == config.format }
-    resolution = format.frame_sizes.find! { |frame| frame.width == config.width && frame.height == config.height }
-    @format = resolution.frame_rate
+    resolution = format.frame_sizes.find! do |frame|
+      if frame.type.discrete?
+        frame.width == config.width && frame.height == config.height
+      else
+        config.width >= frame.min_width && config.width <= frame.max_width && config.height >= frame.min_height && config.height <= frame.max_height
+      end
+    end
     video.close
 
+    @width = config.width
+    @height = config.height
     @multicast_address = Socket::IPAddress.new(config.multicast_ip, config.multicast_port)
-
     @replay_store = ram_drive / @device.stem
   end
 
   @device : Path
-  @format : ::V4L2::FrameRate
+  @resolution : ::V4L2::FrameSize
   @video : ::V4L2::Video? = nil
+
+  getter width : UInt32
+  getter height : UInt32
 
   # loopback device is required if we are going to save replays
   @loopback : Path? = nil
@@ -45,14 +54,16 @@ class TensorflowLite::Pipeline::Input::V4L2 < TensorflowLite::Pipeline::Input
     end
 
     # configure device
-    format = @format
+    resolution = @resolution
     @video = video = ::V4L2::Video.new(loopback || @device)
-    video.set_format(format).request_buffers(1)
+    video.set_format(
+      resolution.format_id,
+      width,
+      width,
+      V4L2::BufferType::VIDEO_CAPTURE
+    ).request_buffers(1)
 
-    format_code = ::V4L2::PixelFormat.pixel_format_chars(format.format_id)
-    width = format.width
-    height = format.height
-
+    format_code = ::V4L2::PixelFormat.pixel_format_chars(resolution.format_id)
     ffmpeg_format = case format_code
                     when "YUYV"
                       FFmpeg::LibAV::PixelFormat::Yuyv422
@@ -65,8 +76,10 @@ class TensorflowLite::Pipeline::Input::V4L2 < TensorflowLite::Pipeline::Input
     # grab the frames
     @format_cb.try &.call(ffmpeg_format, width.to_i, height.to_i)
     spawn do
+      w = width
+      h = height
       video.stream do |buffer|
-        v4l2_frame = FFmpeg::Frame.new(width, height, ffmpeg_format, buffer: buffer)
+        v4l2_frame = FFmpeg::Frame.new(w, h, ffmpeg_format, buffer: buffer)
         select
         when @next_frame.send(v4l2_frame)
         else
@@ -100,7 +113,7 @@ class TensorflowLite::Pipeline::Input::V4L2 < TensorflowLite::Pipeline::Input
     @loopback_task = task = BackgroundTask.new
     task.run(
       "ffmpeg", "-f", "v4l2", "-input_format", "yuyv422",
-      "-video_size", "#{@format.width}x#{@format.height}",
+      "-video_size", "#{width}x#{height}",
       "-i", @device.to_s,
       "-c:v", "copy", "-f", "v4l2", @loopback.to_s
     )
