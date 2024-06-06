@@ -48,7 +48,11 @@ class TensorflowLite::Pipeline::Input::V4L2 < TensorflowLite::Pipeline::Input
   @multicast_address : Socket::IPAddress
   @streaming_task : BackgroundTask? = nil
 
+  getter? shutting_down : Bool = false
+
   def start
+    @shutting_down = false
+
     # see if there is a loopback device available for replay
     @loopback = loopback = LOOPBACK_MUTEX.synchronize { LOOPBACK_DEVICES.pop? }
     if loopback
@@ -121,6 +125,13 @@ class TensorflowLite::Pipeline::Input::V4L2 < TensorflowLite::Pipeline::Input
       "-i", @device.to_s,
       "-c:v", "copy", "-f", "v4l2", @loopback.to_s
     )
+    spawn do
+      task.on_exit.receive?
+      if !shutting_down?
+        sleep 5
+        start_loopback
+      end
+    end
   end
 
   def start_streaming : Nil
@@ -132,9 +143,17 @@ class TensorflowLite::Pipeline::Input::V4L2 < TensorflowLite::Pipeline::Input
       "-g", "60",
       "-an", "-f", "mpegts", "udp://#{@multicast_address.address}:#{@multicast_address.port}?pkt_size=1316",
     )
+    spawn do
+      task.on_exit.receive?
+      if !shutting_down?
+        sleep 5
+        start_streaming
+      end
+    end
   end
 
   def stop_background_tasks
+    @shutting_down = true
     @loopback_task.try &.close
     @streaming_task.try &.close
     @replay_task.try &.close
