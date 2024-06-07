@@ -2,6 +2,7 @@ require "./stream_replay"
 require "../stats"
 require "ffmpeg"
 require "v4l2"
+require "simple_retry"
 
 class TensorflowLite::Pipeline::Input::V4L2 < TensorflowLite::Pipeline::Input
   include Input::StreamReplay
@@ -64,12 +65,22 @@ class TensorflowLite::Pipeline::Input::V4L2 < TensorflowLite::Pipeline::Input
     # configure device
     resolution = @resolution
     @video = video = ::V4L2::Video.new(loopback || @device)
-    video.set_format(
-      resolution.format_id,
-      width,
-      width,
-      ::V4L2::BufferType::VIDEO_CAPTURE
-    ).request_buffers(1)
+
+    SimpleRetry.try_to(
+      # Runs the block at most 5 times
+      max_attempts: 5,
+      # Initial delay time after first retry
+      base_interval: 200.milliseconds,
+      # Exponentially increase delay up to this period
+      max_interval: 5.seconds
+    ) do
+      video.set_format(
+        resolution.format_id,
+        width,
+        width,
+        ::V4L2::BufferType::VIDEO_CAPTURE
+      ).request_buffers(1)
+    end
 
     format_code = ::V4L2::PixelFormat.pixel_format_chars(resolution.format_id)
     ffmpeg_format = case format_code
@@ -119,23 +130,30 @@ class TensorflowLite::Pipeline::Input::V4L2 < TensorflowLite::Pipeline::Input
 
   def start_loopback : Nil
     @loopback_task = task = BackgroundTask.new
+    spawn do
+      task.on_exit.receive?
+      if !shutting_down?
+        sleep 1
+        start_loopback
+      end
+    end
     task.run(
       "ffmpeg", "-f", "v4l2", "-input_format", "yuyv422",
       "-video_size", "#{width}x#{height}",
       "-i", @device.to_s,
       "-c:v", "copy", "-f", "v4l2", @loopback.to_s
     )
-    spawn do
-      task.on_exit.receive?
-      if !shutting_down?
-        sleep 5
-        start_loopback
-      end
-    end
   end
 
   def start_streaming : Nil
     @streaming_task = task = BackgroundTask.new
+    spawn do
+      task.on_exit.receive?
+      if !shutting_down?
+        sleep 1
+        start_streaming
+      end
+    end
     task.run(
       "ffmpeg", "-f", "v4l2", "-i", @loopback.to_s,
       "-c:v", "libx264", "-tune", "zerolatency", "-preset", "ultrafast",
@@ -143,13 +161,6 @@ class TensorflowLite::Pipeline::Input::V4L2 < TensorflowLite::Pipeline::Input
       "-g", "60",
       "-an", "-f", "mpegts", "udp://#{@multicast_address.address}:#{@multicast_address.port}?pkt_size=1316",
     )
-    spawn do
-      task.on_exit.receive?
-      if !shutting_down?
-        sleep 5
-        start_streaming
-      end
-    end
   end
 
   def stop_background_tasks

@@ -25,6 +25,10 @@ dependencies:
   promise:
     github: spider-gazelle/promise
 
+  # retry with backoff
+  simple_retry:
+    github: spider-gazelle/simple_retry
+
 development_dependencies:
   ameba:
     github: veelenga/ameba
