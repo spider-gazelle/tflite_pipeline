@@ -32,7 +32,7 @@ class TensorflowLite::Pipeline::Input::Stream < TensorflowLite::Pipeline::Input
         # hence why we sleep, to emulate frame pacing
         video.each_frame do |frame|
           select
-          when @next_frame.send(frame)
+          when @next_frame.send(FFmpeg::Frame.new frame)
             sleep 0.02
           else
             stats.skipped += 1
@@ -45,8 +45,9 @@ class TensorflowLite::Pipeline::Input::Stream < TensorflowLite::Pipeline::Input
       start_replay_capture(@input.to_s)
       spawn do
         video.each_frame do |frame|
+          # TODO:: see if we can optimise the frame copies
           select
-          when @next_frame.send(frame)
+          when @next_frame.send(FFmpeg::Frame.new frame)
           else
             stats.skipped += 1
             false
