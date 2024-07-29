@@ -44,10 +44,15 @@ class TensorflowLite::Pipeline::Input::Stream < TensorflowLite::Pipeline::Input
       # Network video stream
       start_replay_capture(@input.to_s)
       spawn do
+        frame_dup = nil
         video.each_frame do |frame|
-          # TODO:: see if we can optimise the frame copies
+          # optimise the frame copies
+          frame_dup ||= FFmpeg::Frame.new(frame.width, frame.height, frame.pixel_format)
+
           select
-          when @next_frame.send(FFmpeg::Frame.new frame)
+          when @next_frame.send(frame.copy_to frame_dup)
+            frame_dup = nil
+            true
           else
             stats.skipped += 1
             false
