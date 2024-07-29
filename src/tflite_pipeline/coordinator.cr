@@ -163,7 +163,7 @@ class TensorflowLite::Pipeline::Coordinator
     # adjusted for placement on the original image
     promises = @scalers.flat_map do |(scaler, tasks)|
       # grab the scaled image for the tasks that work with this resolution
-      scale_task = Promise.defer { scaler.scale(image); nil }
+      scale_task = Promise.defer { scaler.unsafe_scale(image); nil }
 
       tasks.map do |task|
         Promise.defer do

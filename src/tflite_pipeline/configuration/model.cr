@@ -44,8 +44,15 @@ module TensorflowLite::Pipeline::Configuration::BaseModel
   @[JSON::Field(ignore: true)]
   @[YAML::Field(ignore: true)]
   getter labels : Array(String)? do
-    if uri = @label_uri
-      File.read_lines save_uri(URI.new(uri))
+    begin
+      if uri = @label_uri
+        path = save_uri(URI.new(uri))
+        sleep 1
+        File.read_lines path
+      end
+    rescue error
+      Log.warn(exception: error) { "failed to download or read labels file" }
+      nil
     end
   end
 
