@@ -48,11 +48,11 @@ class TensorflowLite::Pipeline::Input::Stream < TensorflowLite::Pipeline::Input
     else
       # Network video stream
       start_replay_capture(@input.to_s)
-      spawn { capture_stream_frames }
+      spawn { capture_stream_frames(video) }
     end
   end
 
-  def capture_stream_frames
+  def capture_stream_frames(video)
     frame_dup = nil
     video.each_frame do |frame|
       # optimise the frame copies
