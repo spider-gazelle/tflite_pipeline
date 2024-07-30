@@ -17,8 +17,13 @@ class TensorflowLite::Pipeline::Input::Stream < TensorflowLite::Pipeline::Input
 
   @input : Path | URI
   @video : FFmpeg::Video? = nil
+  @is_shutdown : Bool = false
 
   def start
+    @is_shutdown = false
+
+    # this needs to be retriable with backoff
+    # especially if we move to having a seperate clip recorder processes
     @video = video = FFmpeg::Video.open @input
 
     video.on_codec do |codec|
@@ -43,26 +48,34 @@ class TensorflowLite::Pipeline::Input::Stream < TensorflowLite::Pipeline::Input
     else
       # Network video stream
       start_replay_capture(@input.to_s)
-      spawn do
-        frame_dup = nil
-        video.each_frame do |frame|
-          # optimise the frame copies
-          frame_dup ||= FFmpeg::Frame.new(frame.width, frame.height, frame.pixel_format)
-
-          select
-          when @next_frame.send(frame.copy_to frame_dup)
-            frame_dup = nil
-            true
-          else
-            stats.skipped += 1
-            false
-          end
-        end
-      end
+      spawn { capture_stream_frames }
     end
   end
 
+  def capture_stream_frames
+    frame_dup = nil
+    video.each_frame do |frame|
+      # optimise the frame copies
+      frame_dup ||= FFmpeg::Frame.new(frame.width, frame.height, frame.pixel_format)
+
+      select
+      when @next_frame.send(frame.copy_to frame_dup)
+        frame_dup = nil
+        true
+      else
+        stats.skipped += 1
+        false
+      end
+    end
+  rescue error
+    Log.warn(exception: error) { "stream IO failed, retrying" }
+    sleep 0.5
+    @video.try(&.close) rescue nil
+    start unless @is_shutdown
+  end
+
   def shutdown
+    @is_shutdown = true
     @video.try &.close
     @replay_task.try &.close
     update_state false
