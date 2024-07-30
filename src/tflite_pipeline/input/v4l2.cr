@@ -1,16 +1,13 @@
-require "./stream_replay"
 require "../stats"
 require "ffmpeg"
 require "v4l2"
 require "simple_retry"
 
 class TensorflowLite::Pipeline::Input::V4L2 < TensorflowLite::Pipeline::Input
-  include Input::StreamReplay
-
   LOOPBACK_DEVICES = ::V4L2::Video.enumerate_loopback_devices
   LOOPBACK_MUTEX   = Mutex.new
 
-  def initialize(config : Configuration::InputDevice, ram_drive : Path)
+  def initialize(config : Configuration::InputDevice)
     @device = path = Path[config.path]
     video = ::V4L2::Video.new(path)
     format = video.supported_formats.find! { |form| form.code == config.format }
@@ -30,7 +27,6 @@ class TensorflowLite::Pipeline::Input::V4L2 < TensorflowLite::Pipeline::Input
     video.close
 
     @multicast_address = Socket::IPAddress.new(config.multicast_ip, config.multicast_port)
-    @replay_store = ram_drive / @device.stem
   end
 
   @device : Path
@@ -59,7 +55,6 @@ class TensorflowLite::Pipeline::Input::V4L2 < TensorflowLite::Pipeline::Input
     if loopback
       start_loopback
       start_streaming
-      start_replay_capture("udp://#{@multicast_address.address}:#{@multicast_address.port}?overrun_nonfatal=1")
     end
 
     # configure device
@@ -167,6 +162,5 @@ class TensorflowLite::Pipeline::Input::V4L2 < TensorflowLite::Pipeline::Input
     @shutting_down = true
     @loopback_task.try &.close
     @streaming_task.try &.close
-    @replay_task.try &.close
   end
 end

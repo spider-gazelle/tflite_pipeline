@@ -1,18 +1,13 @@
-require "./stream_replay"
 require "../stats"
 require "ffmpeg"
 
 class TensorflowLite::Pipeline::Input::Stream < TensorflowLite::Pipeline::Input
-  include Input::StreamReplay
-
-  def initialize(id : String, path : String, ram_drive : Path)
+  def initialize(id : String, path : String)
     if File.exists? path
       @input = Path.new(path)
     else
       @input = URI.parse(path)
     end
-
-    @replay_store = ram_drive / id
   end
 
   @input : Path | URI
@@ -47,7 +42,6 @@ class TensorflowLite::Pipeline::Input::Stream < TensorflowLite::Pipeline::Input
       end
     else
       # Network video stream
-      start_replay_capture(@input.to_s)
       spawn { capture_stream_frames(video) }
     end
   end
@@ -77,7 +71,6 @@ class TensorflowLite::Pipeline::Input::Stream < TensorflowLite::Pipeline::Input
   def shutdown
     @is_shutdown = true
     @video.try &.close
-    @replay_task.try &.close
     update_state false
   end
 end

@@ -1,7 +1,6 @@
 require "./stats"
 
 abstract class TensorflowLite::Pipeline::Input
-  abstract def replay(before : Time::Span, after : Time::Span, & : File ->)
   abstract def start
   abstract def shutdown
 

@@ -7,20 +7,6 @@ class TensorflowLite::Pipeline::Input::Image < TensorflowLite::Pipeline::Input
 
   getter! current_image : StumpyCore::Canvas
 
-  def replay(before : Time::Span, after : Time::Span, & : File ->)
-    canvas = current_image
-    file_name = File.tempname("replay", ".png")
-
-    begin
-      StumpyPNG.write(canvas, file_name)
-      File.open(file_name) do |file|
-        yield file
-      end
-    ensure
-      File.delete? file_name
-    end
-  end
-
   def process(image : StumpyCore::Canvas)
     @current_image = image
 

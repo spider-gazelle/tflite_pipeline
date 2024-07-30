@@ -9,19 +9,14 @@ module TensorflowLite::Image::Detection::BoundingBox
 end
 
 class TensorflowLite::Pipeline::Coordinator
-  REPLAY_CONFIGURE_RAMDISK = ENV["REPLAY_CONFIGURE_RAMDISK"]? == "true"
-  REPLAY_MOUNT_PATH        = Path[ENV["REPLAY_MOUNT_PATH"]? || "/mnt/ramdisk"]
-  REPLAY_MEM_SIZE          = ENV["REPLAY_MEM_SIZE"]? || "512M"
-
   def initialize(@id : String, @config : Configuration::Pipeline)
     case input = @config.input
     in Configuration::InputImage
       @input = Input::Image.new
     in Configuration::InputStream
-      @input = Input::Stream.new(@id, input.path, REPLAY_MOUNT_PATH)
+      @input = Input::Stream.new(@id, input.path)
     in Configuration::InputDevice
-      configure_ram_drive if REPLAY_CONFIGURE_RAMDISK
-      @input = Input::V4L2.new(input, REPLAY_MOUNT_PATH)
+      @input = Input::V4L2.new(input)
     in Configuration::Input
       raise "abstract class, will never occur"
     end
@@ -40,22 +35,6 @@ class TensorflowLite::Pipeline::Coordinator
     @scalers = [] of Tuple(Scaler, Array(Configuration::Model))
     @input.format &->configure_task_scalers(FFmpeg::PixelFormat, Int32, Int32)
     @tracker = @config.track_objects? ? ObjectTracking.new : nil
-  end
-
-  # ram drive for saving replays
-  protected def configure_ram_drive
-    output = IO::Memory.new
-    status = Process.run("mount", output: output)
-    raise "failed to check for existing mount" unless status.success?
-
-    # NOTE:: this won't work in production running as a low privileged user
-    # sudo mkdir -p /mnt/ramdisk
-    # sudo mount -t tmpfs -o size=512M tmpfs /mnt/ramdisk
-    if !String.new(output.to_slice).includes?(REPLAY_MOUNT_PATH.to_s)
-      Dir.mkdir_p REPLAY_MOUNT_PATH
-      status = Process.run("mount", {"-t", "tmpfs", "-o", "size=#{REPLAY_MEM_SIZE}", "tmpfs", REPLAY_MOUNT_PATH.to_s})
-      raise "failed to mount ramdisk: #{REPLAY_MOUNT_PATH}" unless status.success?
-    end
   end
 
   # initialze the scalers on startup for improved performance
