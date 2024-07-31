@@ -14,7 +14,8 @@ class TensorflowLite::Pipeline::Input::Stream < TensorflowLite::Pipeline::Input
   @video : FFmpeg::Video? = nil
   @is_shutdown : Bool = false
 
-  def start
+  def start : Nil
+    return if @is_shutdown
     @is_shutdown = false
 
     # this needs to be retriable with backoff
@@ -44,6 +45,12 @@ class TensorflowLite::Pipeline::Input::Stream < TensorflowLite::Pipeline::Input
       # Network video stream
       spawn { capture_stream_frames(video) }
     end
+  rescue error
+    Log.warn(exception: error) { "stream failed to open" }
+    sleep 0.5
+    @video.try(&.close) rescue nil
+    @video = nil
+    spawn { start } unless @is_shutdown
   end
 
   def capture_stream_frames(video)
@@ -65,6 +72,7 @@ class TensorflowLite::Pipeline::Input::Stream < TensorflowLite::Pipeline::Input
     Log.warn(exception: error) { "stream IO failed, retrying" }
     sleep 0.5
     @video.try(&.close) rescue nil
+    @video = nil
     start unless @is_shutdown
   end
 
