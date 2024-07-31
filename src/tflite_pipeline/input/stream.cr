@@ -49,6 +49,8 @@ class TensorflowLite::Pipeline::Input::Stream < TensorflowLite::Pipeline::Input
         rescue error
           Log.warn(exception: error) { "stream IO failed, retrying" }
           sleep 0.5
+          @video.try(&.close) rescue nil
+          @video = nil
           start
         end
       end
