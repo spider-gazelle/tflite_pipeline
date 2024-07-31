@@ -43,7 +43,15 @@ class TensorflowLite::Pipeline::Input::Stream < TensorflowLite::Pipeline::Input
       end
     else
       # Network video stream
-      spawn { capture_stream_frames(video) }
+      spawn do
+        begin
+          capture_stream_frames(video)
+        rescue error
+          Log.warn(exception: error) { "stream IO failed, retrying" }
+          sleep 0.5
+          start
+        end
+      end
     end
   rescue error
     Log.warn(exception: error) { "stream failed to open" }
